@@ -1,0 +1,23 @@
+{
+  "name": "technical_test",
+  "version": "1.0.0",
+  "description": "RESTful API for movie rentals",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "cross-env NODE_ENV=production node index.js",
+    "dev": "cross-env NODE_ENV=development nodemon index.js"
+  },
+  "author": "Hector Gutierrez",
+  "license": "ISC",
+  "devDependencies": {
+    "cross-env": "^7.0.2",
+    "nodemon": "^2.0.6"
+  },
+  "dependencies": {
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "mongoose": "^5.10.11",
+    "mongoose-unique-validator": "^2.0.3"
+  }
+}
