@@ -36,6 +36,11 @@ const movieSchema = new mongoose.Schema({
     availability: {
         type: Boolean,
         required: true
+    },
+    likes: {
+        type: Number,
+        required: true,
+        min: 0
     }
 })
 
