@@ -9,4 +9,16 @@ moviesRouter.get('/', async (request, response) => {
     response.json(availableMovies)
 })
 
+// get info about a particular movie that is available
+
+moviesRouter.get('/:title', async (request, response) => {
+    const {title} = request.params
+    const [movie] = await Movie.find({title, availability: true})
+    if(movie === undefined) {
+        response.status(404).json({message: `No movie with title "${title}" found`})
+    } else {
+        response.json(movie)
+    }
+})
+
 module.exports = moviesRouter
