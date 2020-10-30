@@ -1,9 +1,10 @@
 const config = require('./utils/config')
 const mongoose = require('mongoose')
-const moviesRouter = require('./controllers/movies')
 const express = require('express')
-const usersRouter = require('./controllers/users')
 const application = express()
+const usersRouter = require('./controllers/users')
+const moviesRouter = require('./controllers/movies')
+const loginRouter = require('./controllers/login')
 
 mongoose.connect(config.mongoURI, {useNewUrlParser: true, useUnifiedTopology: true, useCreateIndex: true})
     .then(() => {
@@ -17,5 +18,6 @@ application.use(express.json())
 
 application.use('/api/movies', moviesRouter)
 application.use('/api/users', usersRouter)
+application.use('/api/login', loginRouter)
 
 module.exports = application
