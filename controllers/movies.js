@@ -1,13 +1,23 @@
 const moviesRouter = require('express').Router()
 const Movie = require('../models/movies')
+const User = require('../models/users')
 const parser = require('body-parser')
-const { PAGINATION_SIZE } = require('../utils/config')
+const jwt = require('jsonwebtoken')
+const { PAGINATION_SIZE, SECRET } = require('../utils/config')
 
 moviesRouter.use(parser.urlencoded({extended: true}))
 
-
 const parseAndRound = n => {
     return Math.abs(Number.parseInt(n))
+}
+
+const getTokenFromRequest = request => {
+    const auth = request.get('authorization')
+    if(auth && auth.toLowerCase().startsWith('bearer ')) {
+        let [_, token] = auth.split(/\s/)
+        return token
+    }
+    return null
 }
 
 // get available movies without a particular ordering. Limit of returned results was set at 'PAGINATION_SIZE'
@@ -60,6 +70,35 @@ moviesRouter.get('/search/:title', async (request, response) => {
         response.status(404).json({message: `No movie with title "${title}" found`})
     } else {
         response.json(movie)
+    }
+})
+
+moviesRouter.post('/like', async (request, response, next) => {
+    try {
+        const {title} = request.body
+        if(title === undefined) {
+            return response.status(404).json({error: 'No movie title specified'})
+        }
+        const movie = await Movie.findOne({title})
+        if(!movie) {
+            // If no movie has been found with ${title}
+            return response.status(404).json({error: `No movie with title: ${title}`})
+        }
+        const token = getTokenFromRequest(request)
+        const decodedToken = jwt.verify(token, SECRET)
+        if(!(token && decodedToken.id)) {
+            return response.status(401).json({error: 'token missing or invalid'})
+        }
+        const user = await User.findById(decodedToken.id)
+        // if ${user} has already 'liked' this movie
+        if(user.likedMovies.indexOf(movie.id) !== -1) {
+            return response.status(204).end()
+        }
+        await User.findByIdAndUpdate(user.id, {likedMovies: [...user.likedMovies, movie.id]})
+        await Movie.findByIdAndUpdate(movie.id, {likes: movie.likes + 1}, {'new': true})
+        response.status(200).json({message: 'liked!', likes: movie.likes + 1})
+    } catch (error) {
+        next(error)
     }
 })
 

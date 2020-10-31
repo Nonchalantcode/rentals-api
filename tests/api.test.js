@@ -7,6 +7,7 @@ const User = require('../models/users')
 const Movie = require('../models/movies')
 const { initialUsers, initialMovies, moviesInDB, usersInDB } = require('./helpers')
 const { describe, test, expect, beforeEach } = require('@jest/globals')
+const { application } = require('express')
 
 
 describe(`When there are initially some movies (${initialMovies.length}) in the DB`, () => {
@@ -152,6 +153,46 @@ describe('When there are initially 2 users in the DB', () => {
             .send(initialUsers[0])
             .expect(400)
             .expect('Content-Type', /application\/json/)
+    })
+
+    test('A login attempt by a registered user succeeds', async () => {
+        let {userName, password} = initialUsers[1]
+        await api
+        .post('/api/login')
+        .send({userName, password})
+        .expect(200)
+        .expect('Content-Type', /application\/json/)
+    })
+    
+    test('A login attempt by a non-registered user or a user using bad credentials fails', async () => {
+        let invalidUser = {userName: 'invalidUser1', password: 'password123'}
+        await api
+            .post('/api/login')
+            .send({...invalidUser})
+            .expect(401)
+    })
+
+    test('A registered and logged in user can "like" a movie', async () => {
+        const {userName, password} = initialUsers[1]
+        let authToken = null
+        await api
+                .post('/api/login')
+                .send({userName, password})
+                .expect(response => {
+                    authToken = response.body
+                })
+        const allMovies = await moviesInDB()
+        const randomMovie = allMovies[Math.floor(Math.random() * allMovies.length)]
+        await api
+            .post('/api/movies/like')
+            .set('Authorization', `bearer ${authToken.token}`)
+            .send({title: randomMovie.title})
+            .expect(200)
+            .expect(response => {
+                if(response.body.likes !== randomMovie.likes + 1) {
+                    throw new Error("Like functionality badly implemented")
+                }
+            })
     })
 
 })
