@@ -6,13 +6,14 @@ const usersRouter = require('./controllers/users')
 const moviesRouter = require('./controllers/movies')
 const loginRouter = require('./controllers/login')
 const { unknownEndpoint } = require('./utils/middleware')
+const { info } = require('./utils/logger')
 
 mongoose.connect(config.mongoURI, {useNewUrlParser: true, useUnifiedTopology: true, useCreateIndex: true})
     .then(() => {
-        console.log(`Connected to MongoDB: ${config.mongoURI}`)
+        info(`Connected to MongoDB: ${config.mongoURI}`)
     })
     .catch(error => {
-        console.log(`Error connecting to MongoDB: ${error.message}`)
+        error(`Error connecting to MongoDB: ${error.message}`)
     })
 
 application.use(express.json())

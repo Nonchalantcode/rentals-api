@@ -20,7 +20,7 @@ moviesRouter.get('/', async (request, response) => {
         await Movie
                 .find({availability: true})
                 .skip(isNaN(skip) ? 0 : skip)   /* When a user agent sends a string which can't be parsed into a number, use defaults */
-                .limit(isNaN(limit) ? PAGINATION_SIZE : limit)
+                .limit(isNaN(limit) || limit === 0 ? PAGINATION_SIZE : limit)
     response.json(availableMovies)
 })
 
@@ -53,7 +53,7 @@ moviesRouter.get('/sort', async (request, response) => {
 
 // get info about a particular movie that is available
 
-moviesRouter.get('/:title', async (request, response) => {
+moviesRouter.get('/search/:title', async (request, response) => {
     const {title} = request.params
     const [movie] = await Movie.find({title, availability: true})
     if(movie === undefined) {

@@ -6,8 +6,10 @@ const { SECRET } = require('../utils/config')
 
 loginRouter.post('/', async (request, response) => {
     const {userName, password} = request.body
-
     const user = await User.findOne({userName})
+    console.log(`Username: ${userName}. Password: ${password}`)
+    console.log(`Passwordhash ${user.passwordHash}`)
+    console.log(user.toString())
     const correctPassword = user === null 
         ? false 
         : await bcrypt.compare(password, user.passwordHash)
