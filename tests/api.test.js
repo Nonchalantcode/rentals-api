@@ -6,6 +6,7 @@ const User = require('../models/users')
 const Movie = require('../models/movies')
 const { initialUsers, initialMovies, moviesInDB, usersInDB, mockMovie, testMovie } = require('./helpers')
 const { describe, test, expect, beforeEach } = require('@jest/globals')
+const { move } = require('../app')
 
 const getAuthToken = async (userCredentials) => {
     let token = null
@@ -16,6 +17,10 @@ const getAuthToken = async (userCredentials) => {
                 token = response.body
             })
     return token
+}
+
+const pickRandom = coll => {
+    return coll[Math.floor(Math.random() * coll.length)]
 }
 
 describe(`When there are initially some movies (${initialMovies.length}) in the DB`, () => {
@@ -114,7 +119,7 @@ describe(`When there are initially some movies (${initialMovies.length}) in the 
     })
 
     test('A movie can be retrieved by title', async () => {
-        let randomMovie = initialMovies[Math.floor(Math.random() * initialMovies.length)]
+        let randomMovie = pickRandom(initialMovies)
         await api
             .get(`/api/movies/search/${randomMovie.title}`)
             .expect(200)
@@ -185,7 +190,7 @@ describe('When there are initially 2 users in the DB', () => {
     test('A registered and logged in user can "like" a movie', async () => {
         let authToken = await getAuthToken(initialUsers[1])
         const allMovies = await moviesInDB()
-        const randomMovie = allMovies[Math.floor(Math.random() * allMovies.length)]
+        const randomMovie = pickRandom(allMovies)
         await api
             .post('/api/movies/like')
             .set('Authorization', `bearer ${authToken.token}`)
@@ -200,7 +205,7 @@ describe('When there are initially 2 users in the DB', () => {
 
     test('Only a logged in user can "like" a movie', async () => {
         const allMovies = await moviesInDB()
-        const randomMovie = allMovies[Math.floor(Math.random() * allMovies.length)]
+        const randomMovie = pickRandom(allMovies)
         await api
             .post('/api/movies/like')
             .send({title: randomMovie.title})
@@ -280,7 +285,7 @@ describe('When there are initially 2 users in the DB', () => {
     test('Only a user with admin privileges can update a movie', async () => {
         let adminToken = await getAuthToken(initialUsers[0])
         let allMovies = await moviesInDB()
-        let randomMovie = allMovies[Math.floor(Math.random() * allMovies.length)]
+        let randomMovie = pickRandom(allMovies)
         let newTitle = "This is the updated title"
         // Let's update the title of ${randomMovie}
         await api
@@ -300,7 +305,7 @@ describe('When there are initially 2 users in the DB', () => {
     test("A user with non-admin privileges can't update a movie", async () => {
         let userToken = await getAuthToken(initialUsers[1])
         let allMovies = await moviesInDB()
-        let randomMovie = allMovies[Math.floor(Math.random() * allMovies.length)]
+        let randomMovie = pickRandom(allMovies)
         let newTitle = "This is the updated title"
         // Let's update the title of ${randomMovie}
         await api
@@ -348,6 +353,47 @@ describe('When there are initially 2 users in the DB', () => {
 
         // finally, delete the test movie
         await Movie.findByIdAndDelete(movie.id)
+    })
+
+    test("A logged in user can buy a movie", async () => {
+        let userToken = await getAuthToken(initialUsers[1])
+        let allMovies = await moviesInDB()
+        let randomMovie = pickRandom(allMovies)
+        let copies = 3
+        await api
+            .post(`/api/movies/buy/${randomMovie.title}`)
+            .set('Authorization', `bearer ${userToken.token}`)
+            .send({copies})
+            .expect(200)
+            .expect('Content-Type', /application\/json/)
+            .expect(response => {
+                let data = response.body
+                if(data.message !== 'Purchase completed!') {
+                    throw new Error("Purchase functionality not working as expected.")
+                }
+            })
+
+        let movie = await Movie.findById(randomMovie.id)
+        let user = await User.findOne({email: initialUsers[1].email})
+        expect(movie.stock).toBe(randomMovie.stock - copies)
+        // Check that the movie was registered as part of the purchases field of this user.
+        expect(user.purchases[0].movie.toString()).toBe(movie._id.toString())
+
+        await user.updateOne({purchases: []})
+    })
+
+    test("A user that isn't logged-in can't buy a movie", async () => {
+        let allMovies = await moviesInDB()
+        let randomMovie = pickRandom(allMovies)
+        let copies = 1
+        await api
+            .post(`/api/movies/buy/${randomMovie.title}`)
+            .send({copies})
+            .expect(401)
+
+        let movie = await Movie.findById(randomMovie.id)
+        // The amount of copies available for a movie didn't decrease by ${copies}
+        expect(movie.stock).toBe(randomMovie.stock)
     })
 
 })

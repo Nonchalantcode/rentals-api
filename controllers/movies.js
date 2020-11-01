@@ -4,7 +4,7 @@ const User = require('../models/users')
 const parser = require('body-parser')
 const jwt = require('jsonwebtoken')
 const { PAGINATION_SIZE, SECRET, ROLES } = require('../utils/config')
-const { logUpdates } = require('../utils/logger')
+const { logUpdates, logPurchases } = require('../utils/logger')
 
 moviesRouter.use(parser.urlencoded({extended: true}))
 
@@ -35,7 +35,7 @@ const getMovieDetails = body => {
     })
 }
 
-var summarizeChanges = obj => {
+const summarizeUpdates = obj => {
     return Object.keys(obj)
             .reduce((result, currentProp) => {
                 result.push(
@@ -44,7 +44,7 @@ var summarizeChanges = obj => {
                 return result
             }, [])
             .join('\n')
-  }
+}
 
 // get available movies without a particular ordering. Limit of returned results was set at 'PAGINATION_SIZE'
 
@@ -132,7 +132,7 @@ moviesRouter.put('/:movieID', async (request, response, next) => {
 
             let updatedMovie = await Movie.findByIdAndUpdate(movieID, populatedProps, {'new': true})
             logUpdates(
-                `Updated ${updatedMovie.id} on ${new Date().toISOString()}. ${summarizeChanges(populatedProps)}\n`
+                `Updated ${updatedMovie.id} on ${new Date().toISOString()}. ${summarizeUpdates(populatedProps)}\n`
             )
             return response.json(updatedMovie)
         }
@@ -227,6 +227,56 @@ moviesRouter.post('/like', async (request, response, next) => {
     }
 })
 
+moviesRouter.post('/buy/:title', async (request, response, next) => {
+    try {
+        const {title} = request.params
+        let {copies} = request.body
+        copies = parseAndRound(copies)
+        const userToken = getTokenFromRequest(request)
+        const decodedToken = jwt.verify(userToken, SECRET)
+        if(!decodedToken.id) {
+            return response.status(401).json({error: 'token missing or invalid'})
+        }
+        const user = await User.findById(decodedToken.id)
+        const movie = await Movie.findOne({title})
 
+        if(!movie) {
+            return response.status(404).json({error: `No movie with title "${title}" found`})
+        }
+
+        if(movie.stock < copies) {
+            return response.status(400).json({error: `Only ${movie.stock} copies of this movie currently available`})
+        }
+
+        const purchaseDate = Date.now()
+        const unitPrice = movie.salePrice
+        const totalCharge = unitPrice * copies
+
+        await movie.updateOne({stock: movie.stock - copies})
+        await user.updateOne({
+            purchases: [...user.purchases, {movie: movie.id, copies, purchaseDate, unitPrice, totalCharge}]
+        })
+
+        const purchaseSummary = {
+            title,
+            unitPrice,
+            totalCharge,
+            copiesPurchased: copies,
+            purchaseDate: new Date(purchaseDate)
+        }
+
+        logPurchases(
+            `User ${user.userName} with id ${user.id} purchased ${copies} copies of movie "${title}" with unit price ${unitPrice} for a total of ${totalCharge}\n`
+        )
+
+        response.status(200).json({
+            message: 'Purchase completed!',
+            summary: purchaseSummary
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
 
 module.exports = moviesRouter

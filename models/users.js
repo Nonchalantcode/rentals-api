@@ -25,6 +25,9 @@ const userSchema = new mongoose.Schema({
     rentals: [
         {
             movie: {type: mongoose.SchemaTypes.ObjectId, ref: 'Movie'},
+            copies: Number,
+            unitPrice: Number,
+            totalCharge: Number,
             rentalDate: Number, /* a number equivalent to Date.now() */
             returnDate: Number, /* a number equivalent to Date.now() */
         }
@@ -32,6 +35,9 @@ const userSchema = new mongoose.Schema({
     purchases: [
         {
             movie: {type: mongoose.SchemaTypes.ObjectId, ref: 'Movie'},
+            copies: Number,
+            unitPrice: Number,
+            totalCharge: Number,
             purchaseDate: Number /* a number equivalent to Date.now() */
         }
     ],

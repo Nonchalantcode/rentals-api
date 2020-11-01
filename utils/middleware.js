@@ -3,10 +3,9 @@ const unknownEndpoint = (request, response) => {
 }
 
 const errorHandler = (error, request, response, next) => {
-    
     if(error.name === 'JsonWebTokenError') {
         return response.status(401).json({
-            error: 'invalid token'
+            error: 'token missing or invalid'
         })
     }
     if(error.name === 'ValidationError') {

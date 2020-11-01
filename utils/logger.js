@@ -1,7 +1,8 @@
 const fs = require('fs')
 const path = require('path')
 
-const UPDATES_FILE = path.resolve('logs', 'updates.txt')
+const UPDATES_LOG = path.resolve('logs', 'updates.txt')
+const PURCHASES_LOG = path.resolve('logs', 'purchases.txt')
 
 const info = (...args) => {
     if(process.env.NODE_ENV !== 'test') {
@@ -14,13 +15,21 @@ const error = (...params) => {
 }
 
 function logUpdates(info) {
-    fs.appendFile(UPDATES_FILE, info, err => {
+    fs.appendFile(UPDATES_LOG, info, err => {
         if(err) {
             error("Something went wrong while trying to write to the update.txt log file")
         }
     })
 }
 
+function logPurchases(info) {
+    fs.appendFile(PURCHASES_LOG, info, err => {
+        if(err){
+            error("Something went wrong while trying to write to the purchases.txt log file")
+        }
+    })
+}
+
 module.exports = {
-    info, error, logUpdates
+    info, error, logPurchases, logUpdates
 }
