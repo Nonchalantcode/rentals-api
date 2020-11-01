@@ -127,6 +127,23 @@ moviesRouter.put('/:movieID', async (request, response, next) => {
     }
 })
 
+moviesRouter.delete('/:movieID', async (request, response, next) => {
+    try {
+        const token = getTokenFromRequest(request)
+        const decodedToken = token ? jwt.verify(token, SECRET) : null
+        const user = decodedToken !== null ? await User.findById(decodedToken.id) : null
+        const isAdmin = user === null ? false : user.role === ROLES.ADMIN
+        if(isAdmin) {
+            const {movieID} = request.params
+            await Movie.findByIdAndDelete(movieID)
+            return response.json({message: `Deleted. ID was ${movieID}`})
+        }
+        response.status(403).json({error: 'Forbidden'})
+    } catch (error) {
+        next(error)
+    }
+})
+
 // get a sorted list of available movies. Sorting by 'title' is the default. Limit of returned results was set at 'PAGINATION_SIZE'
 // $ curl 'localhost:8000/api/movies/sort/?by=title'
 // $ curl 'localhost:8000/api/movies/sort/?by=popularity'

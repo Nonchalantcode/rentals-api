@@ -310,6 +310,46 @@ describe('When there are initially 2 users in the DB', () => {
             .expect(403)
     })
 
+    test("A user with admin privileges can delete a movie from the DB", async () => {
+        let adminToken = await getAuthToken(initialUsers[0])
+        let movie = await mockMovie()
+        let allMovies = await moviesInDB()
+
+        // Check that the test movie entity was saved
+        expect(allMovies).toHaveLength(initialMovies.length + 1)
+
+        // Issue a DELETE request to delete the test movie
+        await api
+            .delete(`/api/movies/${movie.id}`)
+            .set('Authorization', `bearer ${adminToken.token}`)
+            .expect(200)
+            
+        // Check that the movie has been removed from the database
+        expect(await Movie.findById(movie.id)).toBe(null)
+
+    })
+
+    test("A user with non-admin privileges can't delete a movie from the DB", async () => {
+        let userToken = await getAuthToken(initialUsers[1])
+        let movie = await mockMovie()
+        let allMovies = await moviesInDB()
+
+        // Check that the test movie entity was saved
+        expect(allMovies).toHaveLength(initialMovies.length + 1)
+
+        // Issue a DELETE request to delete the test movie
+        await api
+            .delete(`/api/movies/${movie.id}`)
+            .set('Authorization', `bearer ${userToken.token}`)
+            .expect(403)
+        
+        // Check that the movie still exists in the database
+        expect(await Movie.findById(movie.id)).not.toBe(null)
+
+        // finally, delete the test movie
+        await Movie.findByIdAndDelete(movie.id)
+    })
+
 })
 
 afterAll((done) => {
