@@ -10,7 +10,7 @@ const errorHandler = (error, request, response, next) => {
     }
     if(error.name === 'ValidationError') {
         return response.status(401).json({
-            error: 'email or username already taken'
+            error: error.message
         })
     }
     next(error)

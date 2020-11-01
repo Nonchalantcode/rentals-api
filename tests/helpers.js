@@ -149,25 +149,28 @@ const moviesInDB = async () => {
     return movies.map(movie => movie.toJSON())
 }
 
+const testMovie = {
+    title: 'Test movie',
+    description: 'This is just a test movie object. It will be deleted soon.',
+    posters: [
+        "https://upload.wikimedia.org/wikipedia/en/a/a4/The_Jungle_Book_%282016%29.jpg"
+    ],
+    stock: 10,
+    rentalPrice: 30,
+    salePrice: 40,
+    availability: true,
+    likes: 1000
+}
+
 const mockMovie = async (isAvailable = false) => {
-    let movie = new Movie({
-        title: "Test movie",
-        description: "This is an unavailable test movie. It will be deleted soon",
-        posters: [
-            "https://upload.wikimedia.org/wikipedia/en/a/a2/The_Handmaiden_film.png"
-        ],
-        stock: 100,
-        rentalPrice: 20,
-        salePrice: 30,
-        availability: isAvailable,
-        likes: 1000
-    })
+    let movie = new Movie({...testMovie, availability: isAvailable})
     return await movie.save()
 }
 
 module.exports = {
     initialMovies,
     initialUsers,
+    testMovie,
     moviesInDB,
     mockMovie,
     usersInDB

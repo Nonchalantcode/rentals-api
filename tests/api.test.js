@@ -4,7 +4,7 @@ const app = require('../app')
 const api = supertest(app)
 const User = require('../models/users')
 const Movie = require('../models/movies')
-const { initialUsers, initialMovies, moviesInDB, usersInDB, mockMovie } = require('./helpers')
+const { initialUsers, initialMovies, moviesInDB, usersInDB, mockMovie, testMovie } = require('./helpers')
 const { describe, test, expect, beforeEach } = require('@jest/globals')
 
 const getAuthToken = async (userCredentials) => {
@@ -241,6 +241,40 @@ describe('When there are initially 2 users in the DB', () => {
                 })
             
             await Movie.findByIdAndDelete(unavailableTestMovie.id)
+    })
+
+    test('A user with admin privileges can create a movie', async () => {
+        let adminToken = await getAuthToken(initialUsers[0])
+        await api
+            .post('/api/movies')
+            .set('Authorization', `bearer ${adminToken.token}`)
+            .send({...testMovie})
+            .expect(201)
+            .expect('Content-Type', /application\/json/)
+
+        const allMovies = await moviesInDB()
+        expect(allMovies).toHaveLength(initialMovies.length + 1)
+        await Movie.findOneAndDelete({title: testMovie.title})
+
+    })
+
+    test('A non-registered user cannot create a movie', async () => {
+        await api
+            .post('/api/movies')
+            .send({...testMovie})
+            .expect(403)
+    })
+
+    test('A registered user with non-admin privileges cannot create a movie', async () => {
+        let userToken = await getAuthToken(initialUsers[1])
+        await api
+            .post('/api/movies')
+            .set('Authorization', `bearer ${userToken.token}`)
+            .send({...testMovie})
+            .expect(403)
+
+        const allMovies = await moviesInDB()
+        expect(allMovies).toHaveLength(initialMovies.length)
     })
 
 })

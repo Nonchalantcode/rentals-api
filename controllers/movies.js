@@ -20,6 +20,20 @@ const getTokenFromRequest = request => {
     return null
 }
 
+const getMovieDetails = body => {
+    let {title, description, posters, stock, rentalPrice, salePrice, availability, likes} = body
+    return new Movie({
+        title, 
+        description,
+        posters,
+        stock,
+        rentalPrice,
+        salePrice,
+        availability: availability || true,
+        likes: likes || 0
+    })
+}
+
 // get available movies without a particular ordering. Limit of returned results was set at 'PAGINATION_SIZE'
 
 moviesRouter.get('/', async (request, response, next) => {
@@ -30,7 +44,7 @@ moviesRouter.get('/', async (request, response, next) => {
         const user = decodedToken !== null ? await User.findById(decodedToken.id) : null
         const isAdmin = user === null ? false : user.role === ROLES.ADMIN
         let queryObject = null
-        
+
         if(isAdmin) {
             switch(view) {
                 case 'available': {
@@ -55,6 +69,23 @@ moviesRouter.get('/', async (request, response, next) => {
                     .skip(isNaN(skip) ? 0 : skip)   /* When a user agent sends a string which can't be parsed into a number, use defaults */
                     .limit(isNaN(limit) || limit === 0 ? PAGINATION_SIZE : limit)
         response.json(availableMovies)
+    } catch (error) {
+        next(error)
+    }
+})
+
+moviesRouter.post('/', async (request, response, next) => {
+    try {
+        const token = getTokenFromRequest(request)
+        const decodedToken = token ? jwt.verify(token, SECRET) : null
+        const user = decodedToken !== null ? await User.findById(decodedToken.id) : null
+        const isAdmin = user === null ? false : user.role === ROLES.ADMIN
+        if(isAdmin) {
+            const movie = getMovieDetails(request.body)
+            await movie.save()
+            return response.status(201).send(movie)
+        }
+        response.status(403).json({error: 'Forbidden'})
     } catch (error) {
         next(error)
     }
@@ -127,5 +158,7 @@ moviesRouter.post('/like', async (request, response, next) => {
         next(error)
     }
 })
+
+
 
 module.exports = moviesRouter
