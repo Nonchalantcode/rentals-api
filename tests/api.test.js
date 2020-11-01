@@ -2,13 +2,21 @@ const mongoose = require('mongoose')
 const supertest = require('supertest')
 const app = require('../app')
 const api = supertest(app)
-const bcrypt = require('bcrypt')
 const User = require('../models/users')
 const Movie = require('../models/movies')
-const { initialUsers, initialMovies, moviesInDB, usersInDB } = require('./helpers')
+const { initialUsers, initialMovies, moviesInDB, usersInDB, mockMovie } = require('./helpers')
 const { describe, test, expect, beforeEach } = require('@jest/globals')
-const { application } = require('express')
 
+const getAuthToken = async (userCredentials) => {
+    let token = null
+        await api
+            .post('/api/login')
+            .send({userName: userCredentials.userName, password: userCredentials.password})
+            .expect(response => {
+                token = response.body
+            })
+    return token
+}
 
 describe(`When there are initially some movies (${initialMovies.length}) in the DB`, () => {
     beforeEach(async () => {
@@ -19,6 +27,7 @@ describe(`When there are initially some movies (${initialMovies.length}) in the 
     })
 
     test('Any user can get the list of available movies', async () => {
+        let unavailableTestMovie = await mockMovie()
         await api
             .get(`/api/movies/?limit=${initialMovies.length}`)
             .expect(200)
@@ -28,7 +37,8 @@ describe(`When there are initially some movies (${initialMovies.length}) in the 
                     throw new Error('Not all movies are returned')
                 }
             })
-
+        
+        Movie.findByIdAndDelete(unavailableTestMovie.id)
     })
 
     test('Movies are returned sorted by title by default', async () => {
@@ -151,17 +161,17 @@ describe('When there are initially 2 users in the DB', () => {
         await api
             .post('/api/users')
             .send(initialUsers[0])
-            .expect(400)
+            .expect(401)
             .expect('Content-Type', /application\/json/)
     })
 
     test('A login attempt by a registered user succeeds', async () => {
         let {userName, password} = initialUsers[1]
         await api
-        .post('/api/login')
-        .send({userName, password})
-        .expect(200)
-        .expect('Content-Type', /application\/json/)
+            .post('/api/login')
+            .send({userName, password})
+            .expect(200)
+            .expect('Content-Type', /application\/json/)
     })
     
     test('A login attempt by a non-registered user or a user using bad credentials fails', async () => {
@@ -173,14 +183,7 @@ describe('When there are initially 2 users in the DB', () => {
     })
 
     test('A registered and logged in user can "like" a movie', async () => {
-        const {userName, password} = initialUsers[1]
-        let authToken = null
-        await api
-                .post('/api/login')
-                .send({userName, password})
-                .expect(response => {
-                    authToken = response.body
-                })
+        let authToken = await getAuthToken(initialUsers[1])
         const allMovies = await moviesInDB()
         const randomMovie = allMovies[Math.floor(Math.random() * allMovies.length)]
         await api
@@ -193,6 +196,51 @@ describe('When there are initially 2 users in the DB', () => {
                     throw new Error("Like functionality badly implemented")
                 }
             })
+    })
+
+    test('Only a logged in user can "like" a movie', async () => {
+        const allMovies = await moviesInDB()
+        const randomMovie = allMovies[Math.floor(Math.random() * allMovies.length)]
+        await api
+            .post('/api/movies/like')
+            .send({title: randomMovie.title})
+            .expect(401)
+    })
+
+    test('A user with admin privileges can see a list of available and unavailable movies', async () => {
+        const unavailableTestMovie = await mockMovie()
+        let adminToken = await getAuthToken(initialUsers[0])
+
+        await api
+            .get(`/api/movies/?limit=${initialMovies.length + 1}`)
+            .set('Authorization', `bearer ${adminToken.token}`)
+            .expect(200)
+            .expect('Content-Type', /application\/json/)
+            .expect(response => {
+                if(response.body.length !== initialMovies.length + 1) {
+                    throw new Error("Admin user is not pulling all movies")
+                }
+            })
+        
+        await Movie.findByIdAndDelete(unavailableTestMovie.id)
+    })
+
+    test('A user with admin privileges can get a list of unavailable movies', async () => {
+        const unavailableTestMovie = await mockMovie()
+        let adminToken = await getAuthToken(initialUsers[0])
+
+            await api
+                .get('/api/movies/?view=unavailable')
+                .set('Authorization', `bearer ${adminToken.token}`)
+                .expect(200)
+                .expect('Content-Type', /application\/json/)
+                .expect(response => {
+                    if(response.body.length !== 1) {
+                        throw new Error("Admin user is not pulling unavailable movies")
+                    }
+                })
+            
+            await Movie.findByIdAndDelete(unavailableTestMovie.id)
     })
 
 })

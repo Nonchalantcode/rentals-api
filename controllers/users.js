@@ -9,23 +9,23 @@ const emailInDB = async (email) => {
 
 // create a new user
 
-usersRouter.post('/', async (request, response) => {
-    let {email, password, userName, role} = request.body
-    role = role !== ROLES.ADMIN ? 'user' : role /* enforce 'user' role by default' */
-    
-    if(await emailInDB(email)) {
-        return response.status(400).json({message: `User with email ${email} already exists`})
+usersRouter.post('/', async (request, response, next) => {
+    try {
+        let {email, password, userName, role} = request.body
+        role = role !== ROLES.ADMIN ? 'user' : role /* enforce 'user' role by default' */
+        
+        const passwordHash = await bcrypt.hash(password, SALT_ROUNDS)
+        const user = new User({
+            email,
+            userName,
+            passwordHash,
+            role
+        })
+        const savedUser = await user.save()
+        response.json(savedUser)
+    } catch (error) {
+        next(error)
     }
-    
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS)
-    const user = new User({
-        email,
-        userName,
-        passwordHash,
-        role
-    })
-    const savedUser = await user.save()
-    response.json(savedUser)
 })
 
 module.exports = usersRouter

@@ -3,7 +3,7 @@ const Movie = require('../models/movies')
 const User = require('../models/users')
 const parser = require('body-parser')
 const jwt = require('jsonwebtoken')
-const { PAGINATION_SIZE, SECRET } = require('../utils/config')
+const { PAGINATION_SIZE, SECRET, ROLES } = require('../utils/config')
 
 moviesRouter.use(parser.urlencoded({extended: true}))
 
@@ -22,16 +22,42 @@ const getTokenFromRequest = request => {
 
 // get available movies without a particular ordering. Limit of returned results was set at 'PAGINATION_SIZE'
 
-moviesRouter.get('/', async (request, response) => {
-    let {skip, limit} = request.query
-    skip = parseAndRound(skip || 0)
-    limit = limit ? parseAndRound(limit) : PAGINATION_SIZE
-    let availableMovies = 
-        await Movie
-                .find({availability: true})
-                .skip(isNaN(skip) ? 0 : skip)   /* When a user agent sends a string which can't be parsed into a number, use defaults */
-                .limit(isNaN(limit) || limit === 0 ? PAGINATION_SIZE : limit)
-    response.json(availableMovies)
+moviesRouter.get('/', async (request, response, next) => {
+    try {
+        let {skip, limit, view} = request.query
+        const token = getTokenFromRequest(request)
+        const decodedToken = token ? jwt.verify(token, SECRET) : null
+        const user = decodedToken !== null ? await User.findById(decodedToken.id) : null
+        const isAdmin = user === null ? false : user.role === ROLES.ADMIN
+        let queryObject = null
+        
+        if(isAdmin) {
+            switch(view) {
+                case 'available': {
+                    queryObject = {availability: true}
+                    break;
+                }
+                case 'unavailable': {
+                    queryObject = {availability: false}
+                    break;
+                }
+                default: {
+                    queryObject = {}
+                }
+            }
+        }
+    
+        skip = parseAndRound(skip || 0)
+        limit = limit ? parseAndRound(limit) : PAGINATION_SIZE
+        let availableMovies = 
+            await Movie
+                    .find(isAdmin ? queryObject : {availability: true})
+                    .skip(isNaN(skip) ? 0 : skip)   /* When a user agent sends a string which can't be parsed into a number, use defaults */
+                    .limit(isNaN(limit) || limit === 0 ? PAGINATION_SIZE : limit)
+        response.json(availableMovies)
+    } catch (error) {
+        next(error)
+    }
 })
 
 // get a sorted list of available movies. Sorting by 'title' is the default. Limit of returned results was set at 'PAGINATION_SIZE'
