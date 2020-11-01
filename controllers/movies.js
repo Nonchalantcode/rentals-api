@@ -4,6 +4,7 @@ const User = require('../models/users')
 const parser = require('body-parser')
 const jwt = require('jsonwebtoken')
 const { PAGINATION_SIZE, SECRET, ROLES } = require('../utils/config')
+const { logUpdates } = require('../utils/logger')
 
 moviesRouter.use(parser.urlencoded({extended: true}))
 
@@ -33,6 +34,17 @@ const getMovieDetails = body => {
         likes: likes || 0
     })
 }
+
+var summarizeChanges = obj => {
+    return Object.keys(obj)
+            .reduce((result, currentProp) => {
+                result.push(
+                  `"${currentProp}" is now "${obj[currentProp]}"`
+                )
+                return result
+            }, [])
+            .join('\n')
+  }
 
 // get available movies without a particular ordering. Limit of returned results was set at 'PAGINATION_SIZE'
 
@@ -119,6 +131,9 @@ moviesRouter.put('/:movieID', async (request, response, next) => {
                 }, Object.create(null))
 
             let updatedMovie = await Movie.findByIdAndUpdate(movieID, populatedProps, {'new': true})
+            logUpdates(
+                `Updated ${updatedMovie.id} on ${new Date().toISOString()}. ${summarizeChanges(populatedProps)}\n`
+            )
             return response.json(updatedMovie)
         }
         response.status(403).json({error: 'Forbidden'})
