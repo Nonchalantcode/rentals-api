@@ -277,6 +277,39 @@ describe('When there are initially 2 users in the DB', () => {
         expect(allMovies).toHaveLength(initialMovies.length)
     })
 
+    test('Only a user with admin privileges can update a movie', async () => {
+        let adminToken = await getAuthToken(initialUsers[0])
+        let allMovies = await moviesInDB()
+        let randomMovie = allMovies[Math.floor(Math.random() * allMovies.length)]
+        let newTitle = "This is the updated title"
+        // Let's update the title of ${randomMovie}
+        await api
+            .put(`/api/movies/${randomMovie.id}`)
+            .set('Authorization', `bearer ${adminToken.token}`)
+            .send({title: newTitle})
+            .expect(200)
+            .expect('Content-Type', /application\/json/)
+            .expect(response => {
+                let updatedMovie = response.body
+                if(updatedMovie.title !== newTitle) {
+                    throw new Error("Movie wasn't updated")
+                }
+            })
+    })
+
+    test("A user with non-admin privileges can't update a movie", async () => {
+        let userToken = await getAuthToken(initialUsers[1])
+        let allMovies = await moviesInDB()
+        let randomMovie = allMovies[Math.floor(Math.random() * allMovies.length)]
+        let newTitle = "This is the updated title"
+        // Let's update the title of ${randomMovie}
+        await api
+            .put(`/api/movies/${randomMovie.id}`)
+            .set('Authorization', `bearer ${userToken.token}`)
+            .send({title: newTitle})
+            .expect(403)
+    })
+
 })
 
 afterAll((done) => {

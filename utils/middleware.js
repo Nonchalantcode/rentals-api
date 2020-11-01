@@ -13,6 +13,11 @@ const errorHandler = (error, request, response, next) => {
             error: error.message
         })
     }
+    if(error.name === 'CastError') {
+        return response.status(400).json({
+            error: 'Wrong ID'
+        })
+    }
     next(error)
 }
 
