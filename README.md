@@ -40,7 +40,17 @@ After installing a copy of MongoDB, you need to start the mongoDB service. If yo
 
 `$ sudo systemctl start mongod`
 
-After making sure the mongoDB service is running, you can import the rental-app database to run the project locally
+After making sure the mongoDB service is running, you can import the rental-app database to run the project locally. Here's a quick overview of how to import a DB dump from MongoDB using the `mongoimport` command line tool:
+
+1. In your terminal, navigate to the folder where the dumped files are. 
+2. `$ mongoimport --db rental-app --file users.json`
+3. Repeat the command above for each file you need to import into the db
+
+Here's a quick easy tutorial on how to do the steps above
+
+https://www.quackit.com/mongodb/tutorial/mongodb_import_data.cfm
+
+___
 
 *This will run the tests in the project, and will create a rental-app-test database and populate it on demand*
 
