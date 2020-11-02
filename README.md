@@ -43,12 +43,15 @@ After installing a copy of MongoDB, you need to start the mongoDB service. If yo
 After making sure the mongoDB service is running, you can import the rental-app database to run the project locally
 
 *This will run the tests in the project, and will create a rental-app-test database and populate it on demand*
+
 `$ npm run test` 
 
 *This will run the project in production mode. You will need to have imported the rental-app database before, otherwise the database and its collections will be created with empty data*
+
 `$ npm run start` 
 
 *Same as above, but it's more useful for development when you need a local server to restart automatically after changes*
+
 `$ npm run dev` 
 
 ## Overview
