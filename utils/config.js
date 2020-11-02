@@ -16,6 +16,8 @@ const ROLES = {
 
 if(process.env.NODE_ENV === 'test') {
     mongoURI = 'mongodb://localhost:27017/rental-app-test'
+} else if(process.env.NODE_ENV === 'production') {
+    mongoURI = process.env.PROD_MONGO_URI
 }
 
 module.exports = { mongoURI, DEFAULT_RENTAL_DAYS, LATE_TAX, PAGINATION_SIZE, PORT, ROLES, SALT_ROUNDS, SECRET, LOGOUT_MESSAGE, TRANSACTION_MESSAGE  }

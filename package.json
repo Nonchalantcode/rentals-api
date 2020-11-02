@@ -6,6 +6,7 @@
   "scripts": {
     "test": "cross-env NODE_ENV=test jest --verbose --runInBand --detectOpenHandles",
     "start": "cross-env NODE_ENV=production node index.js",
+    "deploy": "git add . && git commit -m deploy && git push heroku master",
     "dev": "cross-env NODE_ENV=development nodemon index.js"
   },
   "author": "Hector Gutierrez",
