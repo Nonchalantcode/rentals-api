@@ -6,7 +6,8 @@ const User = require('../models/users')
 const Movie = require('../models/movies')
 const { initialUsers, initialMovies, moviesInDB, usersInDB, mockMovie, testMovie } = require('./helpers')
 const { describe, test, expect, beforeEach } = require('@jest/globals')
-const { move } = require('../app')
+const { TRANSACTION_MESSAGE } = require('../utils/config')
+const { set } = require('../app')
 
 const getAuthToken = async (userCredentials) => {
     let token = null
@@ -359,16 +360,16 @@ describe('When there are initially 2 users in the DB', () => {
         let userToken = await getAuthToken(initialUsers[1])
         let allMovies = await moviesInDB()
         let randomMovie = pickRandom(allMovies)
-        let copies = 3
+        let copies = 1
         await api
-            .post(`/api/movies/buy/${randomMovie.title}`)
+            .post(`/api/movies/store/buy/${randomMovie.title}`)
             .set('Authorization', `bearer ${userToken.token}`)
             .send({copies})
             .expect(200)
             .expect('Content-Type', /application\/json/)
             .expect(response => {
                 let data = response.body
-                if(data.message !== 'Purchase completed!') {
+                if(data.message !== TRANSACTION_MESSAGE) {
                     throw new Error("Purchase functionality not working as expected.")
                 }
             })
@@ -387,13 +388,133 @@ describe('When there are initially 2 users in the DB', () => {
         let randomMovie = pickRandom(allMovies)
         let copies = 1
         await api
-            .post(`/api/movies/buy/${randomMovie.title}`)
+            .post(`/api/movies/store/buy/${randomMovie.title}`)
             .send({copies})
             .expect(401)
 
         let movie = await Movie.findById(randomMovie.id)
         // The amount of copies available for a movie didn't decrease by ${copies}
         expect(movie.stock).toBe(randomMovie.stock)
+    })
+
+    test("A logged in user can rent a movie", async () => {
+        let userToken = await getAuthToken(initialUsers[1])
+        let allMovies = await moviesInDB()
+        let randomMovie = pickRandom(allMovies)
+        let copies = 1
+        let user = await User.findOne({email: initialUsers[1].email})
+
+        // Check that the 'rentals' field of this user is empty
+        expect(user.rentals).toHaveLength(0)
+
+        await api
+            .post(`/api/movies/store/rent/${randomMovie.title}`)
+            .set('Authorization', `bearer ${userToken.token}`)
+            .send({copies})
+            .expect(200)
+            .expect('Content-Type', /application\/json/)
+            .expect(response => {
+                let data = response.body
+                if(data.message !== TRANSACTION_MESSAGE) {
+                    throw new Error("Rental functionality not working as expected.")
+                }
+            })
+
+        let movie = await Movie.findById(randomMovie.id)
+        expect(movie.stock).toBe(randomMovie.stock - copies)
+
+        // Retrieve the updated user from the database and confirm that the 
+        // movie sent above is part of its rentals field now
+        user = await User.findById(user.id)
+        expect(user.rentals[0].movie.toString()).toBe(movie._id.toString())
+
+        await user.updateOne({rentals: []})
+    })
+
+    test("A logged-in user can return a movie", async () => {
+        let userToken = await getAuthToken(initialUsers[1])
+        let allMovies = await moviesInDB()
+        let randomMovie = pickRandom(allMovies)
+        let copies = 1
+        let user = await User.findOne({email: initialUsers[1].email})
+        
+        expect(user.rentals).toHaveLength(0)
+
+        await api
+            .post(`/api/movies/store/rent/${randomMovie.title}`)
+            .set('Authorization', `bearer ${userToken.token}`)
+            .send({copies})
+            .expect(200)
+            .expect('Content-Type', /application\/json/)
+            .expect(response => {
+                let data = response.body
+                if(data.message !== TRANSACTION_MESSAGE) {
+                    throw new Error("Rental functionality not working as expected.")
+                }
+            })
+
+        // query the DB again to get the user with the updated 'rentals' field
+        user = await User.findById(user.id)
+        expect(user.rentals).toHaveLength(1)
+
+        await api
+            .post(`/api/movies/ret/${randomMovie.title}`)
+            .set('Authorization', `bearer ${userToken.token}`)
+            .send(null)
+            .expect(200)
+        
+        // query the DB again to get the user with the updated 'rentals' field
+        user = await User.findById(user.id)
+        expect(user.rentals).toHaveLength(0)
+
+    })
+
+    test("A logged-in user is taxed a late fee if he returns a movie late", async () => {
+        let userToken = await getAuthToken(initialUsers[1])
+        let allMovies = await moviesInDB()
+        let randomMovie = pickRandom(allMovies)
+        let copies = 1
+        let user = await User.findOne({email: initialUsers[1].email})
+        
+        expect(user.rentals).toHaveLength(0)
+
+        await api
+            .post(`/api/movies/store/rent/${randomMovie.title}`)
+            .set('Authorization', `bearer ${userToken.token}`)
+            .send({copies})
+            .expect(200)
+            .expect('Content-Type', /application\/json/)
+            .expect(response => {
+                let data = response.body
+                if(data.message !== TRANSACTION_MESSAGE) {
+                    throw new Error("Rental functionality not working as expected.")
+                }
+            })
+
+        // query the DB again to get the user with the updated 'rentals' field
+        user = await User.findById(user.id)
+        expect(user.rentals).toHaveLength(1)
+
+        // mock a late-return date by modifying the rented movie object to have a return date
+        // 3 days earlier than the delivery date
+        // Since all movies that are rented have a return date set for 3 days from the day
+        // the movie was rented, we need to go back 5 days to mock the 3-day late-return-date
+        
+        let movie = user.rentals[0]
+        movie.returnDate = movie.returnDate - (5 * 60 * 60 * 24 * 1000)
+        await user.updateOne({rentals: [movie]})
+
+        // "return" the movie to the store
+        await api
+            .post(`/api/movies/ret/${randomMovie.title}`)
+            .set('Authorization', `bearer ${userToken.token}`)
+            .send(null)
+            .expect(200)
+        
+        // query the DB again to get the user with the updated 'rentals' field
+        user = await User.findById(user.id)
+        expect(user.rentals).toHaveLength(0)
+        expect(user.overdueTax).toEqual(15)
     })
 
 })
