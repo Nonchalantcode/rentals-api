@@ -32,9 +32,12 @@ After installing a copy of MongoDB, you need to start the mongoDB service. If yo
 
 You'll need to create an **.env** file in root folder of this project on your local machine. You will need to define the following environment variables in **.env** file:
 
-PORT=8000   // any free port will do, for example 3500
-SECRET=secretpassphrase	     // any phrase will do. If the phrase has \s characters, you'll probably need to quote it
-DEV_MONGO_URI='mongodb://localhost:27017/rental-app'
+
+PORT=8000
+
+SECRET=secretpassphrase  (if the phrase you're using has spaces in it, you'll probably need to quote it)
+
+DEV_MONGO_URI=mongodb://localhost:27017/rental-app
 
 ## Overview
 
