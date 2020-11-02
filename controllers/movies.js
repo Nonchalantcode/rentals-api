@@ -3,8 +3,9 @@ const Movie = require('../models/movies')
 const User = require('../models/users')
 const parser = require('body-parser')
 const jwt = require('jsonwebtoken')
-const { PAGINATION_SIZE, SECRET, ROLES, DEFAULT_RENTAL_DAYS, TRANSACTION_MESSAGE, LATE_TAX } = require('../utils/config')
+const { PAGINATION_SIZE, SECRET, ROLES, DEFAULT_RENTAL_DAYS, TRANSACTION_MESSAGE, LATE_TAX, LOGOUT_MESSAGE } = require('../utils/config')
 const { logTransaction } = require('../utils/logger')
+const BannedToken = require('../models/blacklist')
 
 moviesRouter.use(parser.urlencoded({extended: true}))
 
@@ -46,12 +47,16 @@ const summarizeUpdates = obj => {
             .join('\n')
 }
 
-var getDaysDifference = (d1, d2) => {
+const getDaysDifference = (d1, d2) => {
 	const date1 = new Date(d1)
 	const date2 = new Date(d2)
 	const diffTime = Math.abs(date2 - date1)
 	const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 	return diffDays
+}
+
+const isLoggedOut = async (token, userName) => {
+    return await BannedToken.findOne({token, userName}) !== null
 }
 
 // get available movies without a particular ordering. Limit of returned results was set at 'PAGINATION_SIZE'
@@ -64,6 +69,10 @@ moviesRouter.get('/', async (request, response, next) => {
         const user = decodedToken !== null ? await User.findById(decodedToken.id) : null
         const isAdmin = user === null ? false : user.role === ROLES.ADMIN
         let queryObject = null
+
+        if(isAdmin && await isLoggedOut(token, user.userName)) {
+            return response.status(401).json({error: LOGOUT_MESSAGE})
+        } 
 
         if(isAdmin) {
             switch(view) {
@@ -100,6 +109,11 @@ moviesRouter.post('/', async (request, response, next) => {
         const decodedToken = token ? jwt.verify(token, SECRET) : null
         const user = decodedToken !== null ? await User.findById(decodedToken.id) : null
         const isAdmin = user === null ? false : user.role === ROLES.ADMIN
+
+        if(isAdmin && await isLoggedOut(token, user.userName)) {
+            return response.status(401).json({error: LOGOUT_MESSAGE})
+        }
+
         if(isAdmin) {
             const movie = getMovieDetails(request.body)
             await movie.save()
@@ -111,12 +125,19 @@ moviesRouter.post('/', async (request, response, next) => {
     }
 })
 
+// Update the information of a movie entity in the DB
+
 moviesRouter.put('/:movieID', async (request, response, next) => {
     try {
         const token = getTokenFromRequest(request)
         const decodedToken = token ? jwt.verify(token, SECRET) : null
         const user = decodedToken !== null ? await User.findById(decodedToken.id) : null
         const isAdmin = user === null ? false : user.role === ROLES.ADMIN
+
+        if(isAdmin && await isLoggedOut(token, user.userName)) {
+            return response.status(403).json({error: LOGOUT_MESSAGE})
+        }
+
         if(isAdmin) {
             const {movieID} = request.params
             const {title, description, posters, stock, rentalPrice, salePrice, availability, likes} = request.body
@@ -156,6 +177,11 @@ moviesRouter.delete('/:movieID', async (request, response, next) => {
         const decodedToken = token ? jwt.verify(token, SECRET) : null
         const user = decodedToken !== null ? await User.findById(decodedToken.id) : null
         const isAdmin = user === null ? false : user.role === ROLES.ADMIN
+
+        if(isAdmin && await isLoggedOut(token, user.userName)) {
+            return response.status(401).json({error: LOGOUT_MESSAGE})
+        }
+
         if(isAdmin) {
             const {movieID} = request.params
             await Movie.findByIdAndDelete(movieID)
@@ -219,10 +245,16 @@ moviesRouter.post('/like', async (request, response, next) => {
         }
         const token = getTokenFromRequest(request)
         const decodedToken = jwt.verify(token, SECRET)
+
         if(!(token && decodedToken.id)) {
             return response.status(401).json({error: 'token missing or invalid'})
         }
         const user = await User.findById(decodedToken.id)
+
+        if(await isLoggedOut(token, user.userName)) {
+            return response.status(401).json({error: LOGOUT_MESSAGE})
+        }
+
         // if ${user} has already 'liked' this movie
         if(user.likedMovies.indexOf(movie.id) !== -1) {
             return response.status(204).end()
@@ -244,14 +276,19 @@ moviesRouter.post('/store/:transaction/:title', async (request, response, next) 
         let {copies} = request.body
         copies = parseAndRound(copies || 1)
 
-        const userToken = getTokenFromRequest(request)
-        const decodedToken = jwt.verify(userToken, SECRET)
+        const token = getTokenFromRequest(request)
+        const decodedToken = jwt.verify(token, SECRET)
 
         if(!decodedToken.id) {
             return response.status(401).json({error: 'token missing or invalid'})
         }
 
         const user = await User.findById(decodedToken.id)
+
+        if(await isLoggedOut(token, user.userName)) {
+            return response.status(401).json({error: LOGOUT_MESSAGE})
+        }
+
         const movie = await Movie.findOne({title})
 
         if(!movie) {
@@ -311,14 +348,20 @@ moviesRouter.post('/store/:transaction/:title', async (request, response, next) 
 moviesRouter.post('/ret/:title', async (request, response, next) => {
     try {
         const {title} = request.params
-        const userToken = getTokenFromRequest(request)
-        const decodedToken = jwt.verify(userToken, SECRET)
+        const token = getTokenFromRequest(request)
+        const decodedToken = jwt.verify(token, SECRET)
+
         if(!decodedToken.id) {
             return response.status(401).json({error: 'token missing or invalid'})
         }
+
         const user = await User.findById(decodedToken.id)
+
+        if(await isLoggedOut(token, user.userName)) {
+            return response.status(401).json({error: LOGOUT_MESSAGE})
+        }
+
         const movie = await Movie.findOne({title})
-        
         let rentals = user.rentals
 
         if(rentals.length === 0) return response.status(400).json({error: "User isn't currently renting this movie"})

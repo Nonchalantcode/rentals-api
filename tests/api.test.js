@@ -6,8 +6,8 @@ const User = require('../models/users')
 const Movie = require('../models/movies')
 const { initialUsers, initialMovies, moviesInDB, usersInDB, mockMovie, testMovie } = require('./helpers')
 const { describe, test, expect, beforeEach } = require('@jest/globals')
-const { TRANSACTION_MESSAGE } = require('../utils/config')
-const { set } = require('../app')
+const { TRANSACTION_MESSAGE, LOGOUT_MESSAGE } = require('../utils/config')
+const BannedToken = require('../models/blacklist')
 
 const getAuthToken = async (userCredentials) => {
     let token = null
@@ -18,6 +18,46 @@ const getAuthToken = async (userCredentials) => {
                 token = response.body
             })
     return token
+}
+
+const tempUser = {email: 'testemail1@testemail1.com', password: 'mypass123', userName: 'testuser1'}
+
+const createTempUser = async () => {
+    let newUser = null
+    await api
+        .post('/api/users')
+        .send(tempUser)
+        .expect(200)
+        .expect(response => {
+            newUser = response.body
+        })
+    return newUser
+}
+
+const deleteTempUser = async () => {
+    return await User.findOneAndDelete({email: tempUser.email})
+}
+
+const loginTempUser = async () => {
+    let jwt = null
+    await api
+            .post('/api/login')
+            .send({userName: tempUser.userName, password: tempUser.password})
+            .expect(response => {
+                jwt = response.body
+            })
+    return jwt
+}
+
+const logoutUser = async (token) => {
+    return await api
+            .post('/api/logout')
+            .send({userName: token.userName, token: token.token})
+            .expect(204)
+}
+
+const clearBlacklist = async () => {
+    await BannedToken.deleteMany({})
 }
 
 const pickRandom = coll => {
@@ -188,6 +228,29 @@ describe('When there are initially 2 users in the DB', () => {
             .expect(401)
     })
 
+    test('An operation that requires authentication (liking a movie) by a user with an expired JWT fails', async () => {
+        let temporaryUser = await createTempUser()
+        let jwt = await loginTempUser()
+        await logoutUser(jwt)
+        await api
+            .post('/api/movies/like')
+            .set('Authorization', `bearer ${jwt.token}`)
+            .send({title: initialMovies[0].title})
+            .expect(401)
+            .expect(response => {
+                if(response.body.error !== LOGOUT_MESSAGE) {
+                    throw Error("User not being asked correctly to authenticate")
+                }
+            })
+            
+        // check that the token was saved to the blacklist
+        expect(await BannedToken.findOne({token: jwt.token, userName: jwt.userName})).not.toEqual(null)
+            
+        await deleteTempUser()
+        // check that the temporary user was deleted
+        expect(await User.findById(temporaryUser.id)).toEqual(null)
+    })
+
     test('A registered and logged in user can "like" a movie', async () => {
         let authToken = await getAuthToken(initialUsers[1])
         const allMovies = await moviesInDB()
@@ -216,7 +279,6 @@ describe('When there are initially 2 users in the DB', () => {
     test('A user with admin privileges can see a list of available and unavailable movies', async () => {
         const unavailableTestMovie = await mockMovie()
         let adminToken = await getAuthToken(initialUsers[0])
-
         await api
             .get(`/api/movies/?limit=${initialMovies.length + 1}`)
             .set('Authorization', `bearer ${adminToken.token}`)
@@ -231,22 +293,52 @@ describe('When there are initially 2 users in the DB', () => {
         await Movie.findByIdAndDelete(unavailableTestMovie.id)
     })
 
+    test('A user with admin privileges that is logged out is asked to log in again', async () => {
+        let adminToken = await getAuthToken(initialUsers[0])
+        await logoutUser(adminToken)
+        await api
+            .get(`/api/movies/?limit=${initialMovies.length + 1}`)
+            .set('Authorization', `bearer ${adminToken.token}`)
+            .expect(401)
+            .expect(response => {
+                let {body: {error}} = response
+                if(error !== LOGOUT_MESSAGE) {
+                    throw Error("User not being asked correctly to authenticate")
+                }
+            })
+    })
+
     test('A user with admin privileges can get a list of unavailable movies', async () => {
         const unavailableTestMovie = await mockMovie()
         let adminToken = await getAuthToken(initialUsers[0])
+        await api
+            .get('/api/movies/?view=unavailable')
+            .set('Authorization', `bearer ${adminToken.token}`)
+            .expect(200)
+            .expect('Content-Type', /application\/json/)
+            .expect(response => {
+                if(response.body.length !== 1) {
+                    throw new Error("Admin user is not pulling unavailable movies")
+                }
+            })
+        await Movie.findByIdAndDelete(unavailableTestMovie.id)
+    })
 
-            await api
-                .get('/api/movies/?view=unavailable')
-                .set('Authorization', `bearer ${adminToken.token}`)
-                .expect(200)
-                .expect('Content-Type', /application\/json/)
-                .expect(response => {
-                    if(response.body.length !== 1) {
-                        throw new Error("Admin user is not pulling unavailable movies")
-                    }
-                })
-            
-            await Movie.findByIdAndDelete(unavailableTestMovie.id)
+    test("Logged-out admins can't get the list of unavailable movies without being asked to authenticate", async () => {
+        const unavailableTestMovie = await mockMovie()
+        let adminToken = await getAuthToken(initialUsers[0])
+        await logoutUser(adminToken)
+        await api
+            .get('/api/movies/?view=unavailable')
+            .set('Authorization', `bearer ${adminToken.token}`)
+            .expect(401)
+            .expect(response => {
+                let {body: {error}} = response
+                if(error !== LOGOUT_MESSAGE) {
+                    throw Error("User not being asked correctly to authenticate")
+                }
+            })
+        await Movie.findByIdAndDelete(unavailableTestMovie.id)
     })
 
     test('A user with admin privileges can create a movie', async () => {
@@ -262,6 +354,25 @@ describe('When there are initially 2 users in the DB', () => {
         expect(allMovies).toHaveLength(initialMovies.length + 1)
         await Movie.findOneAndDelete({title: testMovie.title})
 
+    })
+
+    test("Logged-out admins can't create new movies", async () => {
+        let adminToken = await getAuthToken(initialUsers[0])
+        await logoutUser(adminToken)
+        await api
+            .post('/api/movies')
+            .set('Authorization', `bearer ${adminToken.token}`)
+            .send({...testMovie})
+            .expect(401)
+            .expect(response => {
+                let {body: {error}} = response
+                if(error !== LOGOUT_MESSAGE) {
+                    throw Error("User not being asked correctly to authenticate")
+                }
+            })            
+
+        const allMovies = await moviesInDB()
+        expect(allMovies).toHaveLength(initialMovies.length)
     })
 
     test('A non-registered user cannot create a movie', async () => {
@@ -519,7 +630,8 @@ describe('When there are initially 2 users in the DB', () => {
 
 })
 
-afterAll((done) => {
+afterAll(async (done) => {
+    await clearBlacklist()
     mongoose.connection.close()
     done()
 })
