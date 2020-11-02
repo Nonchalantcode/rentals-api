@@ -1,0 +1,1 @@
+User testuser with id 5fa035c49c633748176230f7 purchased 1 copies of movie "Green Room" with unit price 40 for a total of 40. Transaction date: Mon Nov 02 2020 10:37:24 GMT-0600 (Central Standard Time)

@@ -103,6 +103,80 @@ moviesRouter.get('/', async (request, response, next) => {
     }
 })
 
+// get info about a particular movie that is available
+
+moviesRouter.get('/search/:title', async (request, response) => {
+    const {title} = request.params
+    const [movie] = await Movie.find({title, availability: true})
+    if(movie === undefined) {
+        response.status(404).json({message: `No movie with title "${title}" found`})
+    } else {
+        response.json(movie)
+    }
+})
+
+// get a sorted list of available movies. Sorting by 'title' is the default. Limit of returned results was set at 'PAGINATION_SIZE'
+// $ curl 'localhost:8000/api/movies/sort/?by=title'
+// $ curl 'localhost:8000/api/movies/sort/?by=popularity'
+
+moviesRouter.get('/sort', async (request, response) => {
+    let {by, skip, limit} = request.query;
+    skip = parseAndRound(skip || 0)
+    limit = limit ? parseAndRound(limit) : PAGINATION_SIZE
+    if(by === 'popularity') {
+        const results = 
+            await Movie
+                    .find({availability: true})
+                    .skip(isNaN(skip) ? 0 : skip)
+                    .limit(isNaN(limit) ? PAGINATION_SIZE : limit)
+                    .sort({likes: 'desc'})
+        response.json(results)
+    } else {
+        const results = 
+            await Movie
+                    .find({availability: true})
+                    .skip(isNaN(skip) ? 0 : skip)
+                    .limit(isNaN(limit) ? PAGINATION_SIZE : limit)
+                    .sort({title: 'asc'})
+        response.json(results)
+    }
+})
+
+moviesRouter.post('/like', async (request, response, next) => {
+    try {
+        const {title} = request.body
+        if(title === undefined) {
+            return response.status(404).json({error: 'No movie title specified'})
+        }
+        const movie = await Movie.findOne({title})
+        if(!movie) {
+            // If no movie has been found with ${title}
+            return response.status(404).json({error: `No movie with title: ${title}`})
+        }
+        const token = getTokenFromRequest(request)
+        const decodedToken = jwt.verify(token, SECRET)
+
+        if(!(token && decodedToken.id)) {
+            return response.status(401).json({error: 'token missing or invalid'})
+        }
+        const user = await User.findById(decodedToken.id)
+
+        if(await isLoggedOut(token, user.userName)) {
+            return response.status(401).json({error: LOGOUT_MESSAGE})
+        }
+
+        // if ${user} has already 'liked' this movie
+        if(user.likedMovies.indexOf(movie.id) !== -1) {
+            return response.status(204).end()
+        }
+        await User.findByIdAndUpdate(user.id, {likedMovies: [...user.likedMovies, movie.id]})
+        await Movie.findByIdAndUpdate(movie.id, {likes: movie.likes + 1}, {'new': true})
+        response.status(200).json({message: 'liked!', likes: movie.likes + 1})
+    } catch (error) {
+        next(error)
+    }
+})
+
 moviesRouter.post('/', async (request, response, next) => {
     try {
         const token = getTokenFromRequest(request)
@@ -188,80 +262,6 @@ moviesRouter.delete('/:movieID', async (request, response, next) => {
             return response.json({message: `Deleted. ID was ${movieID}`})
         }
         response.status(403).json({error: 'Forbidden'})
-    } catch (error) {
-        next(error)
-    }
-})
-
-// get a sorted list of available movies. Sorting by 'title' is the default. Limit of returned results was set at 'PAGINATION_SIZE'
-// $ curl 'localhost:8000/api/movies/sort/?by=title'
-// $ curl 'localhost:8000/api/movies/sort/?by=popularity'
-
-moviesRouter.get('/sort', async (request, response) => {
-    let {by, skip, limit} = request.query;
-    skip = parseAndRound(skip || 0)
-    limit = limit ? parseAndRound(limit) : PAGINATION_SIZE
-    if(by === 'popularity') {
-        const results = 
-            await Movie
-                    .find({availability: true})
-                    .skip(isNaN(skip) ? 0 : skip)
-                    .limit(isNaN(limit) ? PAGINATION_SIZE : limit)
-                    .sort({likes: 'desc'})
-        response.json(results)
-    } else {
-        const results = 
-            await Movie
-                    .find({availability: true})
-                    .skip(isNaN(skip) ? 0 : skip)
-                    .limit(isNaN(limit) ? PAGINATION_SIZE : limit)
-                    .sort({title: 'asc'})
-        response.json(results)
-    }
-})
-
-// get info about a particular movie that is available
-
-moviesRouter.get('/search/:title', async (request, response) => {
-    const {title} = request.params
-    const [movie] = await Movie.find({title, availability: true})
-    if(movie === undefined) {
-        response.status(404).json({message: `No movie with title "${title}" found`})
-    } else {
-        response.json(movie)
-    }
-})
-
-moviesRouter.post('/like', async (request, response, next) => {
-    try {
-        const {title} = request.body
-        if(title === undefined) {
-            return response.status(404).json({error: 'No movie title specified'})
-        }
-        const movie = await Movie.findOne({title})
-        if(!movie) {
-            // If no movie has been found with ${title}
-            return response.status(404).json({error: `No movie with title: ${title}`})
-        }
-        const token = getTokenFromRequest(request)
-        const decodedToken = jwt.verify(token, SECRET)
-
-        if(!(token && decodedToken.id)) {
-            return response.status(401).json({error: 'token missing or invalid'})
-        }
-        const user = await User.findById(decodedToken.id)
-
-        if(await isLoggedOut(token, user.userName)) {
-            return response.status(401).json({error: LOGOUT_MESSAGE})
-        }
-
-        // if ${user} has already 'liked' this movie
-        if(user.likedMovies.indexOf(movie.id) !== -1) {
-            return response.status(204).end()
-        }
-        await User.findByIdAndUpdate(user.id, {likedMovies: [...user.likedMovies, movie.id]})
-        await Movie.findByIdAndUpdate(movie.id, {likes: movie.likes + 1}, {'new': true})
-        response.status(200).json({message: 'liked!', likes: movie.likes + 1})
     } catch (error) {
         next(error)
     }
