@@ -12,6 +12,18 @@ You'll need to clone this repo to your local machine:
 
 `$ git clone https://github.com/Nonchalantcode/rentals-api.git`
 
+*Note*
+
+You'll need to create an **.env** file in root folder of this project on your local machine. You will need to define the following environment variables in **.env** file:
+
+PORT=8000
+
+SECRET=secretpassphrase  (if the phrase you're using has spaces in it, you'll probably need to quote it)
+
+DEV_MONGO_URI=mongodb://localhost:27017/rental-app
+
+PROD_MONGO_URI=mongodb://localhost:27017/rental-app
+
 Then, from your terminal:
 
 `$ npm install`
@@ -22,22 +34,22 @@ You can download a copy of MongoDB for your OS from
 
 https://www.mongodb.com/
 
-** Note **
+* Note *
 
 After installing a copy of MongoDB, you need to start the mongoDB service. If you're using a Linux based OS, you can do this with
 
 `$ sudo systemctl start mongod`
 
-** Note **
+After making sure the mongoDB service is running, you can import the rental-app database to run the project locally
 
-You'll need to create an **.env** file in root folder of this project on your local machine. You will need to define the following environment variables in **.env** file:
+*This will run the tests in the project, and will create a rental-app-test database and populate it on demand*
+`$ npm run test` 
 
+*This will run the project in production mode. You will need to have imported the rental-app database before, otherwise the database and its collections will be created with empty data*
+`$ npm run start` 
 
-PORT=8000
-
-SECRET=secretpassphrase  (if the phrase you're using has spaces in it, you'll probably need to quote it)
-
-DEV_MONGO_URI=mongodb://localhost:27017/rental-app
+*Same as above, but it's more useful for development when you need a local server to restart automatically after changes*
+`$ npm run dev` 
 
 ## Overview
 
